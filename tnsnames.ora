@@ -1,0 +1,12 @@
+orcldb =
+  (DESCRIPTION =
+    (ADDRESS_LIST =
+        (ADDRESS =
+          (PROTOCOL = TCP)
+          (Host = orc.c9y60e6yldth.us-west-2.rds.amazonaws.com)
+          (Port = 1521)
+        )
+    )
+    (CONNECT_DATA = (SID = orcldb)
+    )
+  )
