@@ -13,7 +13,7 @@ export ORACLE_BASE=/u01/app/oracle
      -memoryPercentage 60 \
      -emConfiguration $DBEM \
         -dbsnmpPassword $DBPASS \
-        -sysmanPassword $DBPASS \
+        -emPassword $DBPASS \
      -redoLogFileSize 512 \
      -recoveryAreaDestination /dbarch \
      -syspassword $DBPASS \
