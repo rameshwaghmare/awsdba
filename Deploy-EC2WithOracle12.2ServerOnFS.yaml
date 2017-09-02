@@ -1,0 +1,322 @@
+---
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >- 
+  Deploy-EC2WithOracle12.2ServerOnFS.yaml: Deploy EC2 Instance with Oracle 12.2 Server and a single Database.
+  Note that this template will create resources for which you will be charged.
+######################################################################################################
+Metadata:
+######################################################################################################
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Parameters:
+          - MyVPCId
+          - MySubnet
+          - VPCSecurityGroupIds
+        Label:
+          default: VPC Configuration
+      - Parameters:
+          - BaseAMI
+          - InstanceType
+          - MyRSAKey
+        Label:
+          default: Instance Configuration
+      - Parameters:
+          - DBName
+          - DBStorageType
+          - DBStorageSize
+          - HostSwapSize
+          - DBCharacterset
+          - DatabasePass
+          - EMConfig
+          - ArchStorageType
+          - ArchStorageSize
+        Label:
+          default: Database Name and Storage
+      - Parameters:
+          - MyOracleBinUser
+          - MyOracleBinPass
+          - MyDBEdition
+        Label:
+          default: Oracle Software Repository and Edition
+
+######################################################################################################
+Parameters:
+######################################################################################################
+  BaseAMI:
+    Description: AMI Id for the Linux Instance. Refer http://faws-supported-images.rax.io/#rhel for Rackspace approved.
+    Type: String
+  InstanceType:
+    Type: String
+    Default: m4.xlarge
+    AllowedValues:
+      - t2.xlarge
+      - t2.2xlarge
+      - t2.medium
+      - t2.large
+      - m3.medium
+      - m3.large
+      - m3.xlarge
+      - m3.2xlarge
+      - m4.large
+      - m4.xlarge
+      - m4.2xlarge
+      - m4.4xlarge
+      - m4.10xlarge
+      - r3.large
+      - r3.xlarge
+      - r3.2xlarge
+      - r3.4xlarge
+      - r3.8xlarge
+  MyRSAKey:
+    Type: String
+    Description: Supply your RSA Key Name
+  MyVPCId:
+    Type: 'AWS::EC2::VPC::Id'
+    Description: Supply VPC Id in the region in which you want to deploy EC2 Instance. 'ID of the VPC (e.g., vpc-0324606e)'
+  MySubnet:
+    Type: String
+    Description: Supply Public Subnet ID.
+  VPCSecurityGroupIds:
+    Default: ''
+    Type: 'List<AWS::EC2::SecurityGroup::Id>'
+    Description: >-
+      Existing security groups being used by App ec2 instances. If no AppSG,
+      enter the VPC Default.
+  DBName:
+    AllowedPattern: '([A-Za-z0-9-]{3,8})'
+    ConstraintDescription: 'No special chars, Min 3, Maximum of 8 characters.'
+    Default: orcl
+    Description: >-
+      Enter your Database Name, Min 3, Maximum of 8 characters (limited by
+      DB_NAME). Primary instance will have the same name of this.
+    Type: String
+  DBStorageType:
+    Type: String
+    Description: Enter the Database Storage to provision.
+    AllowedValues:
+      - gp2
+      - io1
+  DBStorageSize:
+    Type: Number
+    Description: Enter size of the storage needed.For io1, min size is 100GB
+  HostSwapSize:
+    Type: Number
+    Description: Enter size of the swap needed. Usually double the size of RAM.
+  DBCharacterset:
+    AllowedValues:
+      - AL32UTF8
+      - AR8ISO8859P6
+      - AR8MSWIN1256
+      - BLT8ISO8859P13
+      - BLT8MSWIN1257
+      - CL8ISO8859P5
+      - CL8MSWIN1251
+      - EE8ISO8859P2
+      - EE8MSWIN1250
+      - EL8ISO8859P7
+      - EL8MSWIN1253
+      - IW8ISO8859P8
+      - IW8MSWIN1255
+      - JA16EUC
+      - JA16EUCTILDE
+      - JA16SJIS
+      - JA16SJISTILDE
+      - KO16MSWIN949
+      - NE8ISO8859P10
+      - NEE8ISO8859P4
+      - TH8TISASCII
+      - TR8MSWIN1254
+      - US7ASCII
+      - UTF8
+      - VN8MSWIN1258
+      - WE8ISO8859P1
+      - WE8ISO8859P15
+      - WE8ISO8859P9
+      - WE8MSWIN1252
+      - ZHS16GBK
+      - ZHT16HKSCS
+      - ZHT16MSWIN950
+      - ZHT32EUC
+    ConstraintDescription: 'Default is AL32UTF8, Unicode 6.2 UTF-8 Universal character set.'
+    Default: AL32UTF8
+    Description: Character set for Oracle Database.
+    Type: String
+  DatabasePass:
+    AllowedPattern: '([A-Za-z0-9_!@#$%^&*-]{10,30})'
+    ConstraintDescription: 'Input your database Password, Min 10, Maximum of 30 characters.'
+    Description: >-
+      Enter your Database Password, Min 10, maximum of 30 characters. This
+      password is used for the SYS, SYSTEM users of Oracle Database.
+    NoEcho: 'true'
+    Type: String
+  EMConfig:
+    Type: String
+    AllowedValues:
+      - NONE
+      - DBEXPRESS
+    Description: Configuration of Enterprise Manager in the database
+  ArchStorageType:
+    Type: String
+    AllowedValues:
+      - gp2
+      - io1
+    Default: gp2
+    Description: Archivelog Destination Storage Type. For io1, min size is 100GB
+  ArchStorageSize:
+    Type: Number
+    Default: 100
+    Description: Archivelog Destination Storage Size   
+  MyOracleBinUser:
+    Type: String
+    Description: Oracle Binary Repository User Name
+  MyOracleBinPass:
+    Type: String
+    Description: Oracle Binary Repository Password
+  MyDBEdition:
+    Type: String
+    AllowedValues:
+      - EE
+      - SE2
+    Default: "EE"
+    Description: Database Edition.
+######################################################################################################
+Resources:
+######################################################################################################
+  MySecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow SSH to EC2 Bastion Host
+      VpcId:
+        Ref: MyVPCId
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '22'
+        ToPort: '22'
+        CidrIp: 0.0.0.0/0
+      Tags:
+      - Key: Name
+        Value: MySG
+
+  MyEc2Instance:
+    Type: AWS::EC2::Instance
+    Metadata:
+      AWS::CloudFormation::Init:
+        config:
+          files:
+            /etc/cfn/cfn-hup.conf:
+              content: !Sub |
+                    [main]
+                    stack=${AWS::StackId}
+                    region=${AWS::Region}
+                    interval=1
+              mode: '000744'
+              owner: root
+              group: root
+            /etc/cfn/hooks.d/cfn-auto-reloader.conf:
+              content: !Sub |
+                     [cfn-auto-reloader-hook]
+                     triggers=post.update
+                     path=Resources.MyEc2Instance.Metadata.AWS::CloudFormation::Init
+                     action=/opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --region ${AWS::Region} --resource MyEc2Instance
+                     runas=root
+          commands:
+            RunA:
+              command: chmod 700 /root/awsdba/dbserver122/122_oracle_server_config.sh
+            RunB:
+              command: /root/awsdba/dbserver122/122_oracle_server_config.sh
+              env:
+                DBNAME:
+                  Ref: DBName
+                DBCHAR:
+                  Ref: DBCharacterset
+                DBPASS:
+                  Ref: DatabasePass
+                DBEM:
+                  Ref: EMConfig
+                OBINUSER:
+                  Ref: MyOracleBinUser
+                OBINPASS:
+                  Ref: MyOracleBinPass
+                DBEDITION:
+                  Ref: MyDBEdition                 
+              ignoreErrors: "false"   
+          services:
+                  cfn-hup:
+                    enabled: true
+                    ensureRunning: true
+                    files: [/etc/cfn/cfn-hup.conf, /etc/cfn/hooks.d/cfn-auto-reloader.conf]
+    Properties:
+      Tags:
+      - Key: Name
+        Value: !Ref "AWS::StackName"
+      ImageId: 
+        Ref: BaseAMI
+      InstanceType: 
+        Ref: InstanceType
+      KeyName: 
+        Ref: MyRSAKey
+      NetworkInterfaces: 
+        - AssociatePublicIpAddress: "true"
+          DeviceIndex: "0"
+          GroupSet:
+            - Ref: MySecurityGroup
+          SubnetId: 
+            Ref: MySubnet
+      BlockDeviceMappings:
+        - DeviceName: "/dev/sdk"
+          Ebs:
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: "100"
+        - DeviceName: "/dev/sdc"
+          Ebs:
+            VolumeType: "gp2"
+            DeleteOnTermination: "true"
+            VolumeSize: 
+              Ref: HostSwapSize
+        - DeviceName: "/dev/sdm"
+          Ebs:
+            VolumeType:
+              Ref: DBStorageType
+            DeleteOnTermination: "true"
+            VolumeSize:
+              Ref: DBStorageSize
+        - DeviceName: "/dev/sdn"
+          Ebs:
+            VolumeType:
+              Ref: ArchStorageType
+            DeleteOnTermination: "true"
+            VolumeSize:
+              Ref: ArchStorageSize
+      UserData:
+        Fn::Base64: !Sub |
+              #!/bin/bash -xe
+              sleep 30
+              rpm -Uvh http://dl.fedoraproject.org/pub/epel/7/x86_64/e/epel-release-7-10.noarch.rpm
+              yum -y install python-pip wget unzip git
+              cd /root
+              git clone https://github.com/rameshwaghmare/awsdba.git
+              cd /usr/bin
+              /usr/bin/easy_install --script-dir /opt/aws/bin https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-latest.tar.gz
+              cp -f `pip show aws-cfn-bootstrap 2> /dev/null | grep -i "^Location" | awk '{ print $2 "/init/redhat/cfn-hup"}'` /etc/init.d/
+              chmod 755 /etc/init.d/cfn-hup
+              chkconfig --add cfn-hup
+              /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource MyEc2Instance --region ${AWS::Region}
+              /opt/aws/bin/cfn-signal -e 0 --stack ${AWS::StackName} --resource MyEc2Instance --region ${AWS::Region}
+            
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: "PT60M"
+
+######################################################################################################
+Outputs:
+######################################################################################################
+  MyEC2InstancePublicIP:
+    Description: My EC2 Instance Public IP
+    Value: !GetAtt MyEc2Instance.PublicIp
+  MyEC2InstancePrivateIP:
+    Description: My EC2 Instance Private IP
+    Value: !GetAtt MyEc2Instance.PrivateIp
+  MyEC2InstanceID:
+    Description: My EC2 Instance ID
+    Value: !Ref MyEc2Instance
